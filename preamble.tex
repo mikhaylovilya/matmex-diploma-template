@@ -13,14 +13,14 @@
 \newcounter{tmkcount}
 
 \tikzset{
-  use tikzmark/.style={
-    remember picture,
-    overlay,
-    execute at end picture={
-      \stepcounter{tmkcount}
-    },
-  },
-  tikzmark suffix={-\thetmkcount}
+	use tikzmark/.style={
+			remember picture,
+			overlay,
+			execute at end picture={
+					\stepcounter{tmkcount}
+				},
+		},
+	tikzmark suffix={-\thetmkcount}
 }
 
 \usepackage{booktabs} % Пакет для верстки "более книжных" таблиц, вполне годится для оформления результатов
@@ -67,6 +67,6 @@
 % morecomment=[s]{(*}{*)}
 % }
 
-
 \usepackage{totcount}
 \usepackage{setspace}
+\usepackage{indentfirst}
