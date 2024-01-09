@@ -1,7 +1,11 @@
 % !TeX spellcheck = ru_RU
 % !TEX root = vkr.tex
 
-\section{Эксперимент}
+\section{Тестирование}
+\subsection*{Парсер}
+Парсер был протестирован на файлах Mybuild из репозитория Embox используя cram-тесты \footnote{\href{https://github.com/mikhaylovilya/caravan/blob/master/test/parser\_test/parse\_myfiles.t}{https://github.com/mikhaylovilya/caravan/blob/master/test/parser\_test/parse\_myfiles.t} (дата обращения: 08.01.2024)}.
+\subsection*{Непрерывная интеграция}
+С помощью Github Actions была реализована непрерывная интеграция, где происходит сборка проекта при помощи dune, а также запуск тестов.
 % Как мы проверяем, что  всё удачно получилось.  К Новому году для промежуточного отчета желательно хотя бы описать как он будет прово\-диться и на чем.
 
 % \subsection{Условия эксперимента}

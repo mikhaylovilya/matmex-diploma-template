@@ -2,7 +2,7 @@
 % !TEX root = vkr.tex
 
 \section{Реализация}
-Грамматики декларативных языков Myfile и Configfile описаны в формате EBNF. Далее по .grm файлам\footnote{\href{https://github.com/embox/embox/blob/master/mk/mybuild/myfile.grm}{https://github.com/embox/embox/blob/master/mk/mybuild/myfile.grm}} GOLD генерирует необходимый парсер.
+Грамматики декларативных языков Myfile и Configfile описаны в формате EBNF. Далее по .grm файлам\footnote{\href{https://github.com/embox/embox/blob/master/mk/mybuild/myfile.grm}{https://github.com/embox/embox/blob/master/mk/mybuild/myfile.grm} (дата обращения: 08.01.2024)} GOLD генерирует необходимый парсер.
 \begin{lstlisting}[caption=Пример описания грамматики, frame=single, breaklines]
 <ModuleMembers>
         ::= <AnnotatedModuleMember> <ModuleMembers>
@@ -18,8 +18,8 @@
          |  'option'   <Option>
 \end{lstlisting}
 \subsection{Проектирование АСТ}
-Для создания своей реализации парсера необходимо в первую очередь спроектировать структуру данных для АСТ (абстрактного дерева синтаксиса). Для этого использовались алгебраические типы данных \\ OCaml, а также библиотека deriving, для облегчения печати дерева. Во время проектирования необходимо было избавляться от некоторых избыточных правил, а также нужно было переименовывать названия нетерминалов, для лучшей читабельности.
-\begin{lstlisting}[caption=Пример структуры данных из src/parser/ast.mli, language=caml, frame=single, breaklines]
+Для создания своей реализации парсера необходимо в первую очередь спроектировать структуру данных для АСТ (абстрактного дерева синтаксиса). Для этого использовались алгебраические типы данных \\ OCaml, а также библиотека deriving, для облегчения печати дерева. Во время проектирования необходимо было избавляться от некоторых избыточных правил, а также нужно было переименовать названия нетерминалов для лучшей читабельности.
+\begin{lstlisting}[caption=Пример структуры данных из \href{https://github.com/mikhaylovilya/caravan/blob/master/src/parser/ast.mli\#L43C1-L53C40}{ast.mli} , language=caml, frame=single, breaklines]
 type module_member =
   | Depends of composite_names
   | Provides of composite_names
@@ -30,11 +30,53 @@ type module_member =
 [@@deriving show { with_path = false }]
 
 type module_members = (annotations  * module_member) list
-  \end{lstlisting}
-\subsection{Лексический анализ}
-В качестве инструмента для лексического анализа был использован ocamllex.
-\subsection{Синтаксический анализ}
-В качестве инструмента для синтаксического анализа был использован Menhir.
+\end{lstlisting}
+\subsection{Лексический и синтаксический анализ}
+Menhir и ocamllex были использованы для синтаксического и лексического анализа соответственно. Используемые наборы символов были взяты из myfile.grm файла и перенесены в описание лексера. Для токенизации строк и игнорирования комментариев были использованы рекурсивные лексеры. Правила из myfile.grm файла переносились в описание парсера.
+
+\begin{lstlisting}[caption=Пример описания правил в \href{https://github.com/mikhaylovilya/caravan/blob/master/src/parser/parser.mly\#L126C1-L134C61}{parser.mly}, language=caml, frame=single, breaklines]
+annotated_module_member:
+  | annotations = annotation*; module_member = module_member { annotations, module_member };
+module_member:
+  | DEPENDS_KW; references = references { Depends references }
+  | PROVIDES_KW; references = references { Provides references }
+  | REQUIRES_KW; references = references { Requires references }
+  | SOURCE_KW; filenames = filenames { Source filenames }
+  | OBJECT_KW; filenames = filenames { Object filenames }
+  | OPTION_KW; definition = definition { Opt definition };
+\end{lstlisting}
+
+\subsection{Результат работы программы}
+Результат работы парсера на одном из файлов Mybuild.
+
+\begin{lstlisting}[language=caml, frame=single, breaklines]
+  $\mbox{\$}$ ./_build/default/src/parser/parse.exe ../embox/src/mem/misc/Mybuild
+  ((Some ["embox"; "mem"]), [],
+   [([],
+     (Module
+        ([], "slab", None,
+         [([], (Opt (NumberType, "heap_size", (Some (NumberLiteral 524288.)))));
+           ([], (Source ["slab.c"; "slab_impl.h"]));
+           ([], (Depends [["embox"; "mem"; "page_api"]]));
+           ([], (Depends [["embox"; "mem"; "phymem"]]));
+           ([], (Depends [["embox"; "mem"; "heap_place"]]))])));
+     ([(["DefaultImpl"], (Some (Value (Refer ["pool_ndebug"]))))],
+      (Module ([Abstract], "pool", None, [])));
+     ([],
+      (Module
+         ([], "pool_ndebug", (Some ["pool"]),
+          [([], (Source ["pool.c"]));
+            ([], (Depends [["embox"; "util"; "SList"]]))])));
+     ([],
+      (Module
+         ([], "pool_debug", (Some ["pool"]),
+          [([], (Source ["pool_debug.c"])); ([], (Source ["pool_debug.h"]));
+            ([], (Depends [["embox"; "util"; "SList"]]));
+            ([], (Depends [["embox"; "util"; "Bitmap"]]))])))
+     ])
+\end{lstlisting}
+% \subsection{Синтаксический анализ}
+% В качестве инструмента для синтаксического анализа был использован Menhir.
 % Очень важный раздел для будущих программных инженеров, т.е. почти для всех. Важно иметь всегда, в том числе для промежуточных отчетов по учебным практикам или ВКР.
 
 % В процессе работы можно сделать огромное количество косяков, неполный список которых ниже.
