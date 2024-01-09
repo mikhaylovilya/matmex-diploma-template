@@ -54,5 +54,8 @@
         "-c",
         "%DIR%/",
         "%TMPFILE%"
-    ]
+    ],
+    "editor.wordWrap": "on",
+    "cSpell.enabled": true,
+    "cSpell.language": "en, ru"
 }
