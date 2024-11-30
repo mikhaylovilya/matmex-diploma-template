@@ -1,0 +1,47 @@
+% !TeX spellcheck = ru_RU
+% !TEX root = vkr.tex
+
+\section{Реализация поддержки клиента Instrew}
+\begin{lstlisting}[caption={Релокация}, frame=single, breaklines, basicstyle=\footnotesize]
+        uint64_t syma = (uintptr_t) sym + patch_data->addend;
+        uint64_t pc = patch_data->patch_addr;
+        int64_t prel_syma = syma - (int64_t) pc;
+
+        case R_RISCV_32_PCREL:
+
+        if (!rtld_elf_signed_range(prel_syma, 32, "R_RISCV_32_PCREL"))
+           return -EINVAL;
+        rtld_blend(tgt, 0xffffffffff, prel_syma);
+        break;
+    \end{lstlisting}
+
+\begin{lstlisting}[caption={Заголовок}, frame=single, breaklines, basicstyle=\footnotesize]
+        ASM_BLOCK(
+            .text;
+            .global _start;
+            .type _start, %function;
+        _start:
+            .weak __global_pointer;
+            .hidden __global_pointer;
+            .option push;
+            .option norelax;
+            lla gp, __global_pointer;
+            .option pop;
+            mv a0, sp;
+            .weak _DYNAMIC;
+            .hidden _DYNAMIC;
+            lla a1, _DYNAMIC;
+            andi sp, sp, -16;
+            tail __start_main;
+        );
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Системный вызов}, frame=single, breaklines, basicstyle=\footnotesize]
+        static size_t syscall2(int n, size_t a, size_t b)
+        {
+            register size_t a7 __asm__("a7") = n;
+            register size_t a0 __asm__("a0") = a;
+            register size_t a1 __asm__("a1") = b;
+            __asm_syscall("r"(a7), "0"(a0), "r"(a1))
+        }
+\end{lstlisting}
