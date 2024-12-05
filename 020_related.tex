@@ -24,13 +24,13 @@ Valgrind --- инструмент для динамического бинарн
 
 % Dynamo --- инструмент для динамического бинарного анализа.
 \subsection{Динамические бинарные трансляторы с поднятием в LLVM IR}
-Обзор таких инструментов, как:
-\begin{itemize}
-    \item Remill и McSema;
-    \item rev.ng;
-    \item llvm-mctoll;
-\end{itemize}
-был проведен в данной работе\footnote{\href{https://se.math.spbu.ru/thesis/texts/Frolov\_Timofej\_Sergeevich\_Spring\_practice\_2nd\_year\_2024\_text.pdf}{https://se.math.spbu.ru/thesis/texts/Frolov\_Timofej\_Sergeevich\_Spring\_practice\_2nd\_year\_2024\_text.pdf}}.
+%Обзор таких инструментов, как:
+%\begin{itemize}
+%    \item 
+%    \item rev.ng;
+%    \item llvm-mctoll;
+%\end{itemize}
+%был проведен в данной работе\footnote{\href{https://se.math.spbu.ru/thesis/texts/Frolov\_Timofej\_Sergeevich\_Spring\_practice\_2nd\_year\_2024\_text.pdf}{https://se.math.spbu.ru/thesis/texts/Frolov\_Timofej\_Sergeevich\_Spring\_practice\_2nd\_year\_2024\_text.pdf}}.
 \subsubsection{Instrew}
 Instrew --- динамический бинарный транслятор с поднятием инструкций в LLVM IR, открытым исходным кодом и клиент-сервер архитектурой. Как хост архитектуру процессора поддерживает x86\_64 и Aarch64, как целевую --- x86\_64, Aarch64, RISC-V. С помощью бинарного лифтера Rellume поднимает функции в LLVM IR. Может использоваться как эмулятор, так и как инструмент для бинарного анализа кода\cite{10.1145/3381052.3381319}.
 % \subsubsection{Banschee}
