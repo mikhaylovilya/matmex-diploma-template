@@ -2,6 +2,40 @@
 % !TEX root = vkr.tex
 
 \section{Реализация поддержки клиента Instrew}
+Для начала необходимо скомпилировать Instrew, а именно:
+\begin{itemize}
+    \item проставить константы и макросы;
+    \item написать точку входа в программу на ассемблере;
+    \item написать реализацию syscallN для собственной реализации libc, т.н. minilibc.
+\end{itemize}
+
+Из трудностей можно выделить, что при написании точки входа в программу был просмотрен код канонических реализаций libc (в glibc --- файл start.S, в musl --- crt\_arch.S), где была обнаружена плохо задокументированная инструкция \textbf{lla}\footnote{\href{https://reviews.llvm.org/D49661}{https://reviews.llvm.org/D49661}}.
+
+\begin{lstlisting}[caption={Заголовок}, frame=single, breaklines, basicstyle=\footnotesize]
+        ASM_BLOCK(
+            .weak _DYNAMIC;
+            .hidden _DYNAMIC;
+            .global _start;
+        _start:
+            mov x0, sp;
+            adrp x1, _DYNAMIC;
+            add x1, x1, #:lo12:_DYNAMIC;
+            and sp, x0, #0xfffffffffffffff0;
+            bl __start_main;
+);\end{lstlisting}
+
+\begin{lstlisting}[caption={Системный вызов}, frame=single, breaklines, basicstyle=\footnotesize]
+        static size_t syscall2(int n, size_t a, size_t b)
+        {
+        	register size_t a7 __asm__("a7") = n;
+        	register size_t a0 __asm__("a0") = a;
+        	register size_t a1 __asm__("a1") = b;
+        	__asm__ volatile ("ecall\n\t" : "+r"(a0) : "r"(a7), "0"(a0), "r"(a1) : "memory");
+        	return a0;
+        }
+
+\end{lstlisting}
+
 \begin{lstlisting}[caption={Релокация}, frame=single, breaklines, basicstyle=\footnotesize]
         uint64_t syma = (uintptr_t) sym + patch_data->addend;
         uint64_t pc = patch_data->patch_addr;
@@ -13,38 +47,7 @@
            return -EINVAL;
         rtld_blend(tgt, 0xffffffffff, prel_syma);
         break;
-    \end{lstlisting}
-
-\begin{lstlisting}[caption={Заголовок}, frame=single, breaklines, basicstyle=\footnotesize]
-        ASM_BLOCK(
-            .text;
-            .global _start;
-            .type _start, %function;
-        _start:
-            .weak __global_pointer;
-            .hidden __global_pointer;
-            .option push;
-            .option norelax;
-            lla gp, __global_pointer;
-            .option pop;
-            mv a0, sp;
-            .weak _DYNAMIC;
-            .hidden _DYNAMIC;
-            lla a1, _DYNAMIC;
-            andi sp, sp, -16;
-            tail __start_main;
-        );
 \end{lstlisting}
 
-\begin{lstlisting}[caption={Системный вызов}, frame=single, breaklines, basicstyle=\footnotesize]
-        static size_t syscall2(int n, size_t a, size_t b)
-        {
-            register size_t a7 __asm__("a7") = n;
-            register size_t a0 __asm__("a0") = a;
-            register size_t a1 __asm__("a1") = b;
-            __asm_syscall("r"(a7), "0"(a0), "r"(a1))
-        }
-\end{lstlisting}
 
 \section{Реализация CI}
-d
