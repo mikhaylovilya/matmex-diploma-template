@@ -38,7 +38,7 @@
 \end{lstlisting}
 
 \subsection{Исправление runtime ошибок}
-После успешной компиляции пробуем запустить instrew. В данном разделе хочется рассказать о трудностях отладки клиента Instrew и [способах борьбы с ними].
+После успешной компиляции пробуем запустить Instrew. В данном разделе хочется рассказать о трудностях отладки клиента Instrew и [способах борьбы с ними].
 \subsubsection{Специфические флаги сборки}
 При запуске клиента instrew без аргументов получаем ошибку сегментации. Пытаемся отладить программу с помощью gdb. Asan и gprof подключить не удалось, по причинам:
 \begin{itemize}
@@ -53,32 +53,77 @@
 Из-за этого происходит ошибка сегментации, так как клиент Instrew пытается писать в зарезервированную ld-linux память.
 
 \subsubsection{Связь атрибутов и релокаций}
-Далее также при запуске клиента instrew без аргументов программа выходит с exit code -ENOEXEC. Оказалось, что это происходит при обработке одной из релокаций. Оказалось что над функцией \textbf{memset} стоит атрибут weak, из-за чего в итоге меняется тип релокации. Но эту релокацию instrew не может обработать.
-\subsubsection{Дебаг программ, использующих fork() и fexecve()}
-После успешного запуска клиента instrew, пробуем запустить сервер instrew. Чтобы можно было пройтись по программе в gdb, необходимо понимать как вызывается instrew-client:
+Далее также при запуске клиента instrew без аргументов программа выходит с exit code -ENOEXEC. Оказалось, что это происходит при обработке одной из релокаций. Оказалось что над функцией \textbf{memset} стоит атрибут weak, из-за чего в итоге меняется тип релокации. Но эту релокацию Instrew не может обработать.
+\subsubsection{Отладка программ, использующих fork() и fexecve()}
+После успешного запуска клиента Instrew, пробуем запустить сервер Instrew. Чтобы можно было пройтись по программе в gdb, необходимо понимать как вызывается instrew-client:
 \begin{enumerate}
-    \item делается fork() процесса, где дочерний процесс является клиентом instrew;
-    \item в дочернем процессе вызываается fexecve, который запускает программу instrew-client.
+    \item делается fork() процесса, где дочерний процесс является клиентом Instrew;
+    \item в дочернем процессе вызывается fexecve, который запускает программу instrew-client.
 \end{enumerate}
 
 \subsubsection{Релокации и PLT-трамплины}
+При запуске unit-тестов Instrew обнаруживаем ошибку <<Unhandled relocation>>. Нужно добавить необходимые релокации для успешного прохождения тестов.
+
+Для того чтобы определить необходимое вычисление релокации по ее типу, смотрим в документацию RISC-V psABI\footnote{\href{https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc\#relocations}{https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc\#relocations}}. Также примеры реализаций релокаций можно найти в Github репозитории ядра Linux\footnote{\href{https://github.com/torvalds/linux/blob/master/arch/riscv/kernel/module.c}{https://github.com/torvalds/linux/blob/master/arch/riscv/kernel/module.c}}.
+
 \begin{lstlisting}[caption={Релокация}, frame=single, breaklines, basicstyle=\footnotesize]
         uint64_t syma = (uintptr_t) sym + patch_data->addend;
         uint64_t pc = patch_data->patch_addr;
         int64_t prel_syma = syma - (int64_t) pc;
 
         case R_RISCV_32_PCREL:
-
-        if (!rtld_elf_signed_range(prel_syma, 32, "R_RISCV_32_PCREL"))
-           return -EINVAL;
-        rtld_blend(tgt, 0xffffffffff, prel_syma);
-        break;
+            if (!rtld_elf_signed_range(prel_syma, 32, "R_RISCV_32_PCREL"))
+                return -EINVAL;
+            rtld_blend(tgt, 0xffffffffff, prel_syma);
+            break;
 \end{lstlisting}
 
+Для корректного разрешения символов нужно добавить PLT-трамплины. Они используются для поиска нужного символа в PLT (Procedure linkage table). Их реализация специфична для RISC-V ABI, так как обычно они являются набором машинных команд и встраиваются во время выполнения программы.
 
+\begin{lstlisting}[caption={PLT-трамплин}, frame=single, breaklines, basicstyle=\footnotesize]
+        *((uint32_t*) code_ptr+0) = 0x00000297 | ((offset + 0x800) & 0xfffff000);
+        // auipc, t0, offset[31:12]
+        *((uint32_t*) code_ptr+1) = 0x0002b283 | (offset << 20); 
+        // ld t0, offset[11:0](t0)
+        *((uint32_t*) code_ptr+2) = 0x00028067;
+        // jalr, x0, 0(t0)
+        *((uint32_t*) code_ptr+3) = 0x00000013;
+        // nop
+\end{lstlisting}
 
-\subsubsection{PLT-таблица}
-Были добавлены дополнительные символы в PLT-таблицу, а также libatomic в качестве зависимости к instrew-client. Это необходимо для тестирования coreutils, скомпилированного статически
+\subsubsection{PLT}
+При тестировании Instrew на coreutils, было обнаружены проблемы, с разрешением некоторых символов из libgcc и libatomic для RISC-V хоста. Добавлены дополнительные символы в PLT, а также libatomic в качестве зависимости к instrew-client.
+
+\begin{lstlisting}[caption={PLT-трамплин}, frame=single, breaklines, basicstyle=\footnotesize]
+#if defined(__riscv)
+PLT_ENTRY("__muldi3", __muldi3) // libgcc
+PLT_ENTRY("__multi3", __multi3) // libgcc
+PLT_ENTRY("__umoddi3", __umoddi3) // libgcc
+PLT_ENTRY("__udivdi3", __udivdi3) // libgcc
+PLT_ENTRY("__atomic_fetch_add_4", __atomic_fetch_add_4)
+PLT_ENTRY("__atomic_exchange_4", __atomic_exchange_4)
+#endif //defined(__riscv)
+\end{lstlisting}
 
 \section{Реализация CI}
+Github Actions CI нативно не поддерживает архитектуру RISC-V\footnote{\href{https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners\#standard-github-hosted-runners-for-public-repositories}{https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners\#standard-github-hosted-runners-for-public-repositories}}. Для интеграции сборки и тестирования в CI на архитектуре RISC-V, необходимо выбрать между:
+\begin{itemize}
+    \item self-hosted runner на RISC-V;
+    \item эмуляцией RISC-V, например с помощью QEMU-user.
+\end{itemize}
+\subsection{Self-hosted runner}
+Для того чтобы развернуть runner на виртуальной машине или плате, необходимо подвязать в качестве зависимости Dotnet SDK. В Github были найдены сборки runner'а и Dotnet SDK для платформы RISC-V\footnote{\href{https://github.com/dkurt/github\_actions\_riscv}{https://github.com/dkurt/github\_actions\_riscv}}. В результате:
+\begin{itemize}
+    \item на виртуальной машине удалось развернуть только Dotnet SDK версии 9.x.x, на на момент тестирования, runner мог использовать только версию Dotnet 8.x.x, которую не удалось заставить корректно работать\footnote{\href{https://github.com/dkurt/dotnet\_riscv/issues/10\#issuecomment-2220630571}{https://github.com/dkurt/dotnet\_riscv/issues/10\#issuecomment-2220630571}}. Данный подход в качестве решения не подходит, так как для использования runner'а в связке с Dotnet 9.x.x необходимо пересобирать runner.
+    \item на плате Sipeed Lichee PI4A удалось развернуть Dotnet версии 8.x.x и runner. Удалось добавить runner к репозиторию, как self-hosted, и интегрировать сборку и запуск тестов.
+\end{itemize}
 
+\subsection{Эмуляция с помощью QEMU-user}
+Для удобства эмуляции с помощью QEMU-user используем setup-alpine\footnote{\href{https://github.com/jirutka/setup-alpine/tree/v1}{https://github.com/jirutka/setup-alpine/tree/v1}}, так как поддерживает платформу RISC-V. Переписываем .yml файл под Alpine Linux.
+\subsection{Результат}
+Используем эмуляцию архитектуры RISC-V вместо развертывания self-hosted runnner'а, так как: 
+\begin{itemize}
+    \item плохая поддержка Github Actions runner для RISC-V;\
+    \item поддерживать self-hosted runner ресурсоёмко и не входит в задачи в практики;
+    \item для мейнтейнера неудобно использовать self-hosted runner.
+\end{itemize}
